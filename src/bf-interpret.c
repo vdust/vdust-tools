@@ -281,7 +281,7 @@ int bfi_test(bfi_state_t *bfi) {
     case '[':
       if (d) return 1;
       /* Seek forward to closing bracket */
-      while ((c = *++(bfi->script_p)) > 0) {
+      while ((c = *++(bfi->script_p)) != 0) {
         if (c == ']') nb--;
         if (c == '[') nb++;
         if (!nb) break;
