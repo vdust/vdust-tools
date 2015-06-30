@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+
+# Copyright (C) 2011-2015 Raphaël Bois Rousseau
+#
+# Redistribution   and  use in  source  and  binary  forms,  with  or  without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright notice,
+#       this list of conditions and the following disclaimer.
+#     * Redistributions  in  binary form  must reproduce  the above  copyright
+#       notice, this list  of conditions and  the following  disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither   the  name  of the   copyright   holders  nor  the  names  of
+#       contributors may be used  to endorse or promote  products derived from
+#       this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT  HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR  IMPLIED WARRANTIES,  INCLUDING, BUT  NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF  MERCHANTABILITY AND FITNESS  FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN  NO EVENT SHALL THE  COPYRIGHT HOLDERS  BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL,  SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS  INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY,  WHETHER IN CONTRACT,  STRICT LIABILITY, OR TORT
+# (INCLUDING  NEGLIGENCE OR  OTHERWISE) ARISING  IN ANY WAY OUT  OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+# Generate waf bundle script from waf sources with required version and extras
+
+_config_default="$(dirname "$0")/wafgen.conf"
+_destdir_default="$(pwd)"
+
+WAFGEN_CONFIG="${WAFGEN_CONFIG:-$_config_default}"
+WAFGEN_DESTDIR="${WAFGEN_DESTDIR:-$_destdir_default}"
+
+error() {
+  #args: [msg [exit_status]]
+  [[ -n "${1:-}" ]] && echo "${1:-}" >&2
+  exit ${2:-1}
+}
+clean_waf() {
+  #args: [exit_status]
+
+  rm -rf _waf_build_
+  exit ${1:0}
+}
+validate_waf() {
+  #args: file checksum
+
+  echo "Calculating checksum..."
+  local _sha1=$(sha1sum "$1" | cut -d ' ' -f1) || error
+  [[ "$_sha1" == "$2" ]] || error "Checksum mismatch !"
+}
+gen_waf() {
+  #args: url [checksum [build_args ...]]
+  local _url="${1:-}"
+  local _checksum="${2:-}"
+  shift 2
+
+  local _wfile=waf.tar.bz2
+
+  rm -rf _waf_build_ || error #In case a previous build failed.
+  mkdir -p _waf_build_ || error
+  cd _waf_build_ || error
+  wget -O "$_wfile" "$_url" || error
+  [[ -n "$_checksum" ]] && validate_waf "$_wfile" "$_checksum"
+  tar xjf "$_wfile" || error
+  cd waf*/ || error
+  { ./configure && ./waf "$@" ; } || error
+  cp waf "$WAFGEN_DESTDIR" || error
+}
+update_wscript() {
+  # Special case for XMMS2 that checks that the waf version running is the one
+  # in the repository. Noop if the line doesn't appear in the main wscript.
+  [[ -f "$WAFGEN_DESTDIR/wscript" ]] || return 0
+  echo "Update waf version check in main wscript" >&2
+  sed -ri 's/^_waf_hexversion = 0x[0-f]+$/_waf_hexversion = '"$1/" "$WAFGEN_DESTDIR/wscript"
+}
+
+
+usage() {
+  cat <<EOT
+usage: $(basename "$0") [-c CONFIG] [-d DESTDIR]
+       $(basename "$0") -h
+
+Options:
+    Arguments for long options are also required for short options.
+
+    -c, --config=CONFIG
+        The configuration file containing waf version informations.
+        [default: $_config_default]
+
+    -d, --destdir=DESTDIR
+        The directory where to install waf.
+        [default: $_destdir_default]
+
+    -h, --help
+        Show this help and exit.
+
+Environment variables:
+    WAFGEN_CONFIG
+        The configuration file containing waf version informations.
+        Replace default. Overridden by -c option.
+
+    WAFGEN_DESTDIR
+        The directory where to install waf.
+        Replace default. Overridden by -d option.
+EOT
+  exit "${1:-0}"
+}
+# collect arguments
+while [[ $# -gt 0 ]]; do
+  _arg="$1"
+  shift
+  case "$_arg" in
+    -h|--help)
+      usage
+      ;;
+    -c|--config)
+      _arg="--config=$1"
+      shift
+      ;&
+    --config=*)
+      _conf="${_arg#--config=}"
+      WAFGEN_CONFIG="${_conf:-$_conf_default}"
+      ;;
+    -d|--destdir)
+      _arg="--destdir=$1"
+      shift
+      ;&
+    --destdir=*)
+      _destdir="${_arg#--destdir=}"
+      WAFGEN_DESTDIR="${_destdir:-$_destdir_default}"
+      ;;
+    -*)
+      echo "Unknown option ${_arg%%=*}" >&2
+      exit 1
+      ;;
+    *)
+      echo "The script takes no argument"
+      exit 1
+      ;;
+  esac
+done
+
+[ -f "$WAFGEN_CONFIG" ] || error "'$WAFGEN_CONFIG' doesn't exist."
+. "$WAFGEN_CONFIG"
+
+# resolve relative paths
+WAFGEN_DESTDIR="$(realpath "$WAFGEN_DESTDIR")"
+
+[[ -z "${waf_version:-}" ]] && error "WAF version is missing. "
+[[ -z "${waf_sha1:-}" ]] && echo "Warning: No checksum provided." >&2
+waf_extras="--tools=${waf_extras:-}"
+
+url="https://waf.io/waf-${waf_version}.tar.bz2"
+waf_hexver="$(printf "0x%x%02x%02x00" ${waf_version//./ })"
+
+( set -e;
+  gen_waf "$url" "$waf_sha1" "$waf_extras";
+  update_wscript "$waf_hexver";
+) && clean_waf

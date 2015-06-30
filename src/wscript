@@ -1,0 +1,16 @@
+# encoding: utf-8
+
+def build(bld):
+  bld(features = 'c cprogram',
+      source = 'bf-interpret.c',
+      target = 'bf-interpret')
+
+  bld(features = 'c cprogram',
+      source = 'passgen.c',
+      target = 'passgen')
+
+def configure(conf):
+  pass
+
+def options(opt):
+  pass

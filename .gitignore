@@ -1,0 +1,20 @@
+*~
+\#*
+*.bak
+*.old
+*.o
+*.so
+*.mo
+*.bz2
+*.gz
+*.tgz
+*.tbz2
+*.patch
+
+__pycache__
+*.py[co]
+
+#waf stuff
+.lock-*
+.waf*
+_build
