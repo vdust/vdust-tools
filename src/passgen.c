@@ -37,7 +37,9 @@
 #define PASS_COUNT_DEFAULT 1
 
 static const char ALLCHARS[] =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" /* alphanum: 62 */
+  "abcdefghijklmnopqrstuvwxyz0123456789" /* alnum: 36 */
+#define ALNUM_LEN 36
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZ" /* alphanum: 62 */
 #define ALPHANUM_LEN 62
   "-_"
 #define BASE64_LEN 64
@@ -68,7 +70,7 @@ static int check_number(const char *num, const char *opt)
 static void usage(const char *prog)
 {
   fprintf(stderr,
-    "Usage: %s [-l LENGTH] [-c COUNT] [-A|-S|-E|-C CHARS]\n"
+    "Usage: %s [-l LENGTH] [-c COUNT] [-a|-A|-S|-E|-C CHARS]\n"
     "       %s -h\n"
     "\n"
     "Options:\n"
@@ -77,8 +79,9 @@ static void usage(const char *prog)
     "  -h, --help           Print this help message and exit.\n"
     "\n",
     prog, prog);
-  fprintf(stderr, 
-    "  -A, --alphanum       Use alphanum character set.\n"
+  fprintf(stderr,
+    "  -a, --alnum          Use lowercase alphanum character set.\n"
+    "  -A, --alphanum       Use full alphanum character set.\n"
     "  -B, --base64         Use base64 character set (use -_ instead of +/).\n"
     "  -c, --count COUNT    Generate COUNT passwords, one per line. [default: %d]\n"
     "  -C, --chars CHARS    Use a custom character set.\n"
@@ -117,6 +120,8 @@ static int parse_opts(int argc, char *argv[])
       }
     } else if isopt("-c", "--count") {
       optint(pwcount);
+    } else if isopt("-a", "--alnum") {
+      setchars(ALLCHARS, ALNUM_LEN);
     } else if isopt("-A", "--alphanum") {
       setchars(ALLCHARS, ALPHANUM_LEN);
     } else if isopt("-B", "--base64") {
